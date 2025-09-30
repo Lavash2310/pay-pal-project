@@ -1,15 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { 
-  CreditCard, 
-  Plus,
-  Eye,
-  EyeOff,
-  Trash2,
-  Edit,
-  ShieldCheck,
-  X
-} from 'lucide-react';
+import { CreditCard, Plus, Eye, EyeOff, Trash2, CreditCard as Edit, ShieldCheck, X } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { apiService, Card } from '../../services/api';
 import { toast } from 'react-toastify';
