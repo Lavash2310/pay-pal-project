@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { toast } from 'react-toastify';
 import { Search, User, DollarSign, Send, CheckCircle, ArrowLeft } from 'lucide-react';
-import { mockContacts } from '../../data/mockData';
 import { useAuth } from '../../contexts/AuthContext';
+import { apiService } from '../../services/api';
 
 type ContactType = {
   id: string;
@@ -14,12 +14,45 @@ type ContactType = {
 };
 
 const SendMoney: React.FC = () => {
-  const { user } = useAuth();
+  const { user, updateUserBalance } = useAuth();
   const [step, setStep] = useState<'select' | 'amount' | 'confirm' | 'success'>('select');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedContact, setSelectedContact] = useState<ContactType | null>(null);
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
+  
+  // Mock contacts for demo (in production, fetch from API)
+  const mockContacts = [
+    {
+      id: 'contact-1',
+      name: 'Sarah Johnson',
+      email: 'sarah.j@example.com',
+      avatar: 'https://images.pexels.com/photos/733872/pexels-photo-733872.jpeg?auto=compress&cs=tinysrgb&w=150',
+      recent: true
+    },
+    {
+      id: 'contact-2',
+      name: 'Michael Smith',
+      email: 'michael.smith@example.com',
+      avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=150',
+      recent: true
+    },
+    {
+      id: 'contact-3',
+      name: 'Jessica Williams',
+      email: 'jessica.w@example.com',
+      avatar: 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=150',
+      recent: true
+    },
+    {
+      id: 'contact-4',
+      name: 'David Brown',
+      email: 'david.brown@example.com',
+      avatar: 'https://images.pexels.com/photos/1222271/pexels-photo-1222271.jpeg?auto=compress&cs=tinysrgb&w=150',
+      recent: true
+    }
+  ];
   
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value);
@@ -49,12 +82,25 @@ const SendMoney: React.FC = () => {
     setStep('confirm');
   };
   
-  const handleConfirm = () => {
-    // Simulate transaction processing
-    setTimeout(() => {
+  const handleConfirm = async () => {
+    if (!selectedContact || !amount) return;
+    
+    setIsProcessing(true);
+    try {
+      const response = await apiService.sendMoney({
+        recipientEmail: selectedContact.email,
+        amount: parseFloat(amount),
+        note: note
+      });
+      
+      updateUserBalance(response.newBalance);
       setStep('success');
       toast.success('Money sent successfully!');
-    }, 1000);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to send money');
+    } finally {
+      setIsProcessing(false);
+    }
   };
   
   const handleReset = () => {
@@ -331,12 +377,18 @@ const SendMoney: React.FC = () => {
           <div className="flex flex-col space-y-3">
             <button 
               onClick={handleConfirm}
+              disabled={isProcessing}
               className="btn-primary py-3 flex items-center justify-center"
             >
-              Confirm and Send
+              {isProcessing ? (
+                <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white"></div>
+              ) : (
+                'Confirm and Send'
+              )}
             </button>
             <button 
               onClick={() => setStep('amount')}
+              disabled={isProcessing}
               className="btn-secondary py-3"
             >
               Edit Details

@@ -1,18 +1,11 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
-
-interface User {
-  id: string;
-  email: string;
-  firstName: string;
-  lastName: string;
-  balance: number;
-}
+import { apiService, User } from '../services/api';
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  updateUserBalance: (newBalance: number) => void;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, firstName: string, lastName: string) => Promise<void>;
   logout: () => void;
@@ -39,30 +32,29 @@ export function AuthProvider({ children }: AuthProviderProps) {
   useEffect(() => {
     // Check if user is stored in localStorage
     const storedUser = localStorage.getItem('cardpay_user');
+    const storedToken = localStorage.getItem('cardpay_token');
     if (storedUser) {
       setUser(JSON.parse(storedUser));
     }
     setIsLoading(false);
   }, []);
 
-  // Mock login functionality (in a real app, this would make an API call)
+  const updateUserBalance = (newBalance: number) => {
+    if (user) {
+      const updatedUser = { ...user, balance: newBalance };
+      setUser(updatedUser);
+      localStorage.setItem('cardpay_user', JSON.stringify(updatedUser));
+    }
+  };
+
   const login = async (email: string, password: string) => {
     setIsLoading(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const response = await apiService.login({ email, password });
       
-      // For demo purposes, we'll create a mock user
-      const mockUser: User = {
-        id: '1',
-        email,
-        firstName: 'John',
-        lastName: 'Doe',
-        balance: 2540.75
-      };
-      
-      setUser(mockUser);
-      localStorage.setItem('cardpay_user', JSON.stringify(mockUser));
+      setUser(response.user);
+      localStorage.setItem('cardpay_user', JSON.stringify(response.user));
+      localStorage.setItem('cardpay_token', response.token);
     } catch (error) {
       console.error('Login error:', error);
       throw error;
@@ -71,24 +63,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
-  // Mock register functionality
   const register = async (email: string, password: string, firstName: string, lastName: string) => {
     setIsLoading(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const response = await apiService.register({ email, password, firstName, lastName });
       
-      // For demo purposes, we'll create a mock user
-      const mockUser: User = {
-        id: '1',
-        email,
-        firstName,
-        lastName,
-        balance: 0
-      };
-      
-      setUser(mockUser);
-      localStorage.setItem('cardpay_user', JSON.stringify(mockUser));
+      setUser(response.user);
+      localStorage.setItem('cardpay_user', JSON.stringify(response.user));
+      localStorage.setItem('cardpay_token', response.token);
     } catch (error) {
       console.error('Registration error:', error);
       throw error;
@@ -100,12 +82,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const logout = () => {
     setUser(null);
     localStorage.removeItem('cardpay_user');
+    localStorage.removeItem('cardpay_token');
   };
 
   const value = {
     user,
     isAuthenticated: !!user,
     isLoading,
+    updateUserBalance,
     login,
     register,
     logout

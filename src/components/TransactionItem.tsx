@@ -18,7 +18,7 @@ interface TransactionItemProps {
 }
 
 const TransactionItem: React.FC<TransactionItemProps> = ({ transaction, showDate = false }) => {
-  const isCredit = transaction.type === 'credit';
+  const isCredit = transaction.type === 'credit' || transaction.amount > 0;
   const formattedDate = new Date(transaction.date).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
@@ -79,7 +79,7 @@ const TransactionItem: React.FC<TransactionItemProps> = ({ transaction, showDate
         <p className={`font-mono font-medium ${
           isCredit ? 'amount-positive' : 'amount-negative'
         }`}>
-          {isCredit ? '+' : '-'}${Math.abs(transaction.amount).toFixed(2)}
+          {transaction.amount > 0 ? '+' : ''}${transaction.amount.toFixed(2)}
         </p>
         {!showDate && (
           <p className="text-xs text-neutral-500">{formattedDate}</p>

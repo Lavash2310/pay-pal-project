@@ -1,14 +1,37 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Search, Filter, ArrowDownUp, Download } from 'lucide-react';
-import { mockTransactions } from '../../data/mockData';
+import { useAuth } from '../../contexts/AuthContext';
+import { apiService, Transaction } from '../../services/api';
 import TransactionItem from '../../components/TransactionItem';
 
 const Transactions: React.FC = () => {
+  const { user } = useAuth();
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [filterType, setFilterType] = useState<'all' | 'incoming' | 'outgoing'>('all');
   
+  useEffect(() => {
+    if (user) {
+      loadTransactions();
+    }
+  }, [user]);
+
+  const loadTransactions = async () => {
+    if (!user) return;
+    
+    try {
+      const userTransactions = await apiService.getTransactions(user.id);
+      setTransactions(userTransactions);
+    } catch (error) {
+      console.error('Failed to load transactions:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value);
   };
@@ -18,7 +41,7 @@ const Transactions: React.FC = () => {
   };
   
   // Filter and sort transactions
-  const filteredTransactions = mockTransactions
+  const filteredTransactions = transactions
     .filter(transaction => {
       // Filter by search term
       if (searchTerm) {
@@ -43,6 +66,14 @@ const Transactions: React.FC = () => {
       const dateB = new Date(b.date).getTime();
       return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
     });
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-500"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

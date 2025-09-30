@@ -11,14 +11,18 @@ import {
   X
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { mockCards } from '../../data/mockData';
+import { apiService, Card } from '../../services/api';
 import { toast } from 'react-toastify';
 
 const Cards: React.FC = () => {
   const { user } = useAuth();
   const [showCardDetails, setShowCardDetails] = useState<{ [key: string]: boolean }>({});
-  const [cards, setCards] = useState(mockCards);
+  const [cards, setCards] = useState<Card[]>([]);
   const [isAddingCard, setIsAddingCard] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [selectedCardForWithdraw, setSelectedCardForWithdraw] = useState<Card | null>(null);
+  const [withdrawAmount, setWithdrawAmount] = useState('');
   const [newCard, setNewCard] = useState({
     cardNumber: '',
     cardHolder: `${user?.firstName} ${user?.lastName}`,
@@ -26,6 +30,25 @@ const Cards: React.FC = () => {
     expiryYear: '',
     cvv: ''
   });
+
+  useEffect(() => {
+    if (user) {
+      loadCards();
+    }
+  }, [user]);
+
+  const loadCards = async () => {
+    if (!user) return;
+    
+    try {
+      const userCards = await apiService.getCards(user.id);
+      setCards(userCards);
+    } catch (error) {
+      toast.error('Failed to load cards');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const toggleCardDetails = (cardId: string) => {
     setShowCardDetails(prev => ({
@@ -42,7 +65,7 @@ const Cards: React.FC = () => {
     }));
   };
 
-  const handleAddCard = (e: React.FormEvent) => {
+  const handleAddCard = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // Simple validation
@@ -51,38 +74,45 @@ const Cards: React.FC = () => {
       return;
     }
     
-    // Format card number with spaces
-    const formattedCardNumber = newCard.cardNumber
-      .replace(/\s/g, '')
-      .replace(/(.{4})/g, '$1 ')
-      .trim();
-    
-    const newCardObj = {
-      id: `card-${Date.now()}`,
-      cardNumber: formattedCardNumber,
-      cardHolder: newCard.cardHolder,
-      expiryDate: `${newCard.expiryMonth}/${newCard.expiryYear}`,
-      cvv: newCard.cvv,
-      type: 'visa',
-      isDefault: cards.length === 0
-    };
-    
-    setCards([...cards, newCardObj]);
-    setIsAddingCard(false);
-    setNewCard({
-      cardNumber: '',
-      cardHolder: `${user?.firstName} ${user?.lastName}`,
-      expiryMonth: '',
-      expiryYear: '',
-      cvv: ''
-    });
-    
-    toast.success('Card added successfully');
+    try {
+      // Format card number with spaces
+      const formattedCardNumber = newCard.cardNumber
+        .replace(/\s/g, '')
+        .replace(/(.{4})/g, '$1 ')
+        .trim();
+      
+      const addedCard = await apiService.addCard({
+        cardNumber: formattedCardNumber,
+        cardHolder: newCard.cardHolder,
+        expiryMonth: newCard.expiryMonth,
+        expiryYear: newCard.expiryYear,
+        cvv: newCard.cvv
+      });
+      
+      setCards([...cards, addedCard]);
+      setIsAddingCard(false);
+      setNewCard({
+        cardNumber: '',
+        cardHolder: `${user?.firstName} ${user?.lastName}`,
+        expiryMonth: '',
+        expiryYear: '',
+        cvv: ''
+      });
+      
+      toast.success('Card added successfully');
+    } catch (error) {
+      toast.error('Failed to add card');
+    }
   };
 
-  const handleRemoveCard = (cardId: string) => {
-    setCards(cards.filter(card => card.id !== cardId));
-    toast.success('Card removed successfully');
+  const handleRemoveCard = async (cardId: string) => {
+    try {
+      await apiService.removeCard(cardId);
+      setCards(cards.filter(card => card.id !== cardId));
+      toast.success('Card removed successfully');
+    } catch (error) {
+      toast.error('Failed to remove card');
+    }
   };
 
   const setDefaultCard = (cardId: string) => {
@@ -92,6 +122,43 @@ const Cards: React.FC = () => {
     })));
     toast.success('Default card updated');
   };
+
+  const handleWithdraw = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!selectedCardForWithdraw || !withdrawAmount) {
+      toast.error('Please select a card and enter amount');
+      return;
+    }
+    
+    try {
+      const response = await apiService.withdrawMoney({
+        amount: parseFloat(withdrawAmount),
+        cardId: selectedCardForWithdraw.id
+      });
+      
+      // Update user balance in context
+      if (user) {
+        const { updateUserBalance } = useAuth();
+        updateUserBalance(response.newBalance);
+      }
+      
+      setShowWithdrawModal(false);
+      setWithdrawAmount('');
+      setSelectedCardForWithdraw(null);
+      toast.success('Withdrawal successful');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Withdrawal failed');
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-500"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -166,6 +233,16 @@ const Cards: React.FC = () => {
                     className="p-2 rounded-full hover:bg-neutral-100"
                   >
                     <Edit size={18} />
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setSelectedCardForWithdraw(card);
+                      setShowWithdrawModal(true);
+                    }}
+                    className="p-2 rounded-full hover:bg-neutral-100 text-success-500"
+                    title="Withdraw Money"
+                  >
+                    <DollarSign size={18} />
                   </button>
                   <button 
                     onClick={() => handleRemoveCard(card.id)}
@@ -309,6 +386,75 @@ const Cards: React.FC = () => {
             </div>
           </form>
         </motion.div>
+      )}
+      
+      {/* Withdraw Money Modal */}
+      {showWithdrawModal && selectedCardForWithdraw && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <motion.div 
+            className="bg-white rounded-lg p-6 w-full max-w-md mx-4"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.2 }}
+          >
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-lg font-medium text-neutral-800">Withdraw Money</h2>
+              <button 
+                onClick={() => setShowWithdrawModal(false)}
+                className="text-neutral-500 hover:text-neutral-700"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="mb-4 p-3 bg-neutral-50 rounded-lg">
+              <p className="text-sm text-neutral-600">From Card</p>
+              <p className="font-medium">{selectedCardForWithdraw.cardNumber}</p>
+            </div>
+            
+            <form onSubmit={handleWithdraw}>
+              <div className="mb-4">
+                <label htmlFor="withdrawAmount" className="block text-sm font-medium text-neutral-700 mb-1">
+                  Amount to Withdraw
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <DollarSign size={18} className="text-neutral-500" />
+                  </div>
+                  <input
+                    id="withdrawAmount"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={withdrawAmount}
+                    onChange={(e) => setWithdrawAmount(e.target.value)}
+                    className="input-field pl-10"
+                    placeholder="0.00"
+                    required
+                  />
+                </div>
+                {user && (
+                  <p className="mt-1 text-sm text-neutral-600">
+                    Available balance: ${user.balance.toFixed(2)}
+                  </p>
+                )}
+              </div>
+              
+              <div className="flex space-x-3">
+                <button type="submit" className="btn-primary flex-1">
+                  Withdraw
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => setShowWithdrawModal(false)}
+                  className="btn-secondary flex-1"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        </div>
       )}
     </div>
   );

@@ -12,13 +12,33 @@ import {
   EyeOff
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { apiService, Transaction } from '../../services/api';
 import TransactionItem from '../../components/TransactionItem';
-import { mockTransactions } from '../../data/mockData';
 
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
   const [showBalance, setShowBalance] = useState(true);
-  const recentTransactions = mockTransactions.slice(0, 5);
+  const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    if (user) {
+      loadRecentTransactions();
+    }
+  }, [user]);
+
+  const loadRecentTransactions = async () => {
+    if (!user) return;
+    
+    try {
+      const transactions = await apiService.getTransactions(user.id);
+      setRecentTransactions(transactions.slice(0, 5));
+    } catch (error) {
+      console.error('Failed to load transactions:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -99,9 +119,15 @@ const Dashboard: React.FC = () => {
             </Link>
           </div>
           <div className="divide-y divide-neutral-200">
-            {recentTransactions.map((transaction) => (
-              <TransactionItem key={transaction.id} transaction={transaction} />
-            ))}
+            {isLoading ? (
+              <div className="p-6 text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary-500 mx-auto"></div>
+              </div>
+            ) : (
+              recentTransactions.map((transaction) => (
+                <TransactionItem key={transaction.id} transaction={transaction} />
+              ))
+            )}
           </div>
           {recentTransactions.length === 0 && (
             <div className="p-6 text-center text-neutral-500">
